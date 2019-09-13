@@ -3,8 +3,12 @@ close all
 
 displayImgs = true;
 saveImgs = false;
+skipLow = 2;
+skipHigh = 2;
+        
 
 D = 'Samples';
+% S = dir(fullfile(D,'*.jpg')); % pattern to match filenames.
 S = dir(fullfile(D,'VisibleIRDaylight1PM.jpg')); % pattern to match filenames.
 for k = 1:numel(S)
     [path, fname] = fileparts(S(k).name);
@@ -24,35 +28,44 @@ for k = 1:numel(S)
         imshow(W1);
         title(S(k).name);
         w1h = gca;
-        viscircles(centers, radii*1.2,'EdgeColor','r');
+        viscircles(centers, radii,'EdgeColor','r');
     end
     
-    
-    [X,Y] = meshgrid(1:ny,1:nx) ;
-    th = linspace(0,2*pi) ;
-    
     %%
+    th = linspace(0,2*pi) ;
     for ii = 1:numel(radii)
-        if ii ~= 1
-            continue;
-        end
         
-        skipLow = 2;
-        skipHigh = 1;
-        pixelValuesAtRs = zeros(int32(radii(ii))-skipLow-skipHigh,numel(th));
-        transitionTable = zeros(int32(radii(ii))-skipLow-skipHigh,1);
-        denomRange = skipLow:(radii(ii))-skipHigh;
-        for rDenom = denomRange
-            radiusNew = radii(ii)-double(rDenom);
-            xc = uint32(centers(ii,1)+(radiusNew)*cos(th)) ;
-            yc = uint32(centers(ii,2)+(radiusNew)*sin(th)) ;
-            
-            pixelValueAtR = int16(gray_image(sub2ind(size(gray_image), yc,xc)));
-            pixelValueAtR = pixelValueAtR - mean(pixelValueAtR);
-            pixelValuesAtRs(rDenom+1-skipLow,:) = pixelValueAtR;
-            transitionTable(rDenom+1-skipLow) = length(find(diff(pixelValueAtR > 0)));
+        %Define the range of increasing radius sizes, from start to finish
+        % - skip
+        denomRange = skipLow:(radii(ii))-skipHigh; 
+        
+        %Genereate all y coordinates of various radius circles
+        ycs = uint32(centers(ii,1)+(denomRange').*cos(th));
+        %Genereate all x coordinates of various radius circles
+        xcs = uint32(centers(ii,2)+(denomRange').*sin(th));
+        
+        %Find ys that are outside bounds
+        xcsBadIdx = sum(xcs' >= nx)' ~= 0;
+        xcs(xcsBadIdx,:) = [];
+        ycs(xcsBadIdx,:) = [];
+        %Find xs that are outside bounds
+        ycsBadIdx = sum(ycs' >= ny)' ~= 0;
+        xcs(ycsBadIdx,:) = [];
+        ycs(ycsBadIdx,:) = [];
+        
+        %Caluclate (linear) index into the image for each pixel pair
+        %generated above. 
+        circlePixelIdx = sub2ind(size(gray_image), xcs,ycs);
+        
+        pixelValuesAtRs = int16(gray_image(circlePixelIdx));
+        %Offset it so waveform is bipolar
+        pixelValuesAtRs = pixelValuesAtRs - int16(mean(pixelValuesAtRs')');
+        
+        %Count the number of zero corssings.
+        transitionTable = zeros(size(pixelValuesAtRs(:,1)));
+        for rDenom = 1:numel(pixelValuesAtRs(:,1))
+            transitionTable(rDenom) = length(find(diff(pixelValuesAtRs(rDenom,:) > 0)));
         end
-%         pixelValuesAtRs = (pixelValuesAtRs' - mean(pixelValuesAtRs'))';
         
         
         matching = transitionTable >= 3.9 & transitionTable <= 4.1;
@@ -67,10 +80,11 @@ for k = 1:numel(S)
             disp(strlabel)
         end
         if probability > 0.8 && displayImgs
+            [X,Y] = meshgrid(1:ny,1:nx) ;
             % Keep only points lying inside circle
-            xc = centers(ii,1)+radii(ii)*cos(th) ;
-            yc = centers(ii,2)+radii(ii)*sin(th) ;
-            idx = inpolygon(X(:),Y(:),xc',yc) ;
+            yc = centers(ii,1)+radii(ii)*cos(th) ;
+            xc = centers(ii,2)+radii(ii)*sin(th) ;
+            idx = inpolygon(X(:),Y(:),yc',xc) ;
             bound = [centers(ii,1)-radii(ii) centers(ii,2)-radii(ii) radii(ii)*2 radii(ii)*2];
             
             for i = 1:d
@@ -113,7 +127,9 @@ for k = 1:numel(S)
             
             annotation('textbox', [0, 0.5, 0, 0], 'string',strlabel);
             iifig = gca;
-            viscircles(w1h, centers(ii,:), radii(ii,:),'EdgeColor','b');
+            if isvalid(w1h)
+                viscircles(w1h, centers(ii,:), radii(ii,:),'EdgeColor','b');
+            end
             if saveImgs
                 saveas(iifig, strcat('Results/R_',fname,'_Circle',num2str(ii),'.jpg'));
             end
