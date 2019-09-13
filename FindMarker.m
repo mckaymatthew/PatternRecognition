@@ -62,11 +62,11 @@ for k = 1:numel(S)
         pixelValuesAtRs = pixelValuesAtRs - int16(mean(pixelValuesAtRs')');
         
         %Count the number of zero corssings.
-        transitionTable = zeros(size(pixelValuesAtRs(:,1)));
-        for rDenom = 1:numel(pixelValuesAtRs(:,1))
-            transitionTable(rDenom) = length(find(diff(pixelValuesAtRs(rDenom,:) > 0)));
-        end
-        
+        aboveZero = pixelValuesAtRs > 0;
+        %Doing an xor like this will give a 1 when a transition of the sign
+        %occurs
+        diffs = xor(aboveZero(:,1:end-1),aboveZero(:,2:end));
+        transitionTable = sum(diffs')';
         
         matching = transitionTable >= 3.9 & transitionTable <= 4.1;
         probability = sum(matching)/numel(transitionTable);
@@ -75,7 +75,6 @@ for k = 1:numel(S)
         strlabel = sprintf('CandidiateNumber=%d\nProbability=%3.2f\nRadius=%2.2f\n\n',...
             ii,probability*100,radii(ii));
         
-        %             probability = 1
         if probability > 0.8
             disp(strlabel)
         end
