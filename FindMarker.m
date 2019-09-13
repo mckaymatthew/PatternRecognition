@@ -2,22 +2,20 @@ clear all
 close all
 
 displayImgs = true;
-saveImgs = false;
+saveImgs = true;
 skipLow = 2;
 skipHigh = 2;
         
 
 D = 'Samples';
-% S = dir(fullfile(D,'*.jpg')); % pattern to match filenames.
-S = dir(fullfile(D,'VisibleIRDaylight1PM.jpg')); % pattern to match filenames.
+S = dir(fullfile(D,'*.jpg')); % pattern to match filenames.
+% S = dir(fullfile(D,'VisibleIRDaylight1PM.jpg')); % pattern to match filenames.
 for k = 1:numel(S)
     [path, fname] = fileparts(S(k).name);
     F = fullfile(D,S(k).name);
     img = imread(F);
     
     [nx,ny,d] = size(img) ;
-    img = imcrop(img, [0 140 ny nx-300]);
-    [nx,ny,d] = size(img);
     gray_image = rgb2gray(img);
     
     W1 = gradientweight(gray_image, 1.5, 'RolloffFactor', 2, 'WeightCutoff', 0.25);
@@ -45,13 +43,11 @@ for k = 1:numel(S)
         xcs = uint32(centers(ii,2)+(denomRange').*sin(th));
         
         %Find ys that are outside bounds
-        xcsBadIdx = sum(xcs' >= nx)' ~= 0;
-        xcs(xcsBadIdx,:) = [];
-        ycs(xcsBadIdx,:) = [];
+        badIdx = sum(xcs' >= nx)' ~= 0;
         %Find xs that are outside bounds
-        ycsBadIdx = sum(ycs' >= ny)' ~= 0;
-        xcs(ycsBadIdx,:) = [];
-        ycs(ycsBadIdx,:) = [];
+        badIdx = badIdx | sum(ycs' >= ny)' ~= 0;
+        xcs(badIdx,:) = [];
+        ycs(badIdx,:) = [];
         
         %Caluclate (linear) index into the image for each pixel pair
         %generated above. 
